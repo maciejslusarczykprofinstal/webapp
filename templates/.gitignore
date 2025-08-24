@@ -1,0 +1,24 @@
+# Python / Flask
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+instance/
+.pytest_cache/
+.mypy_cache/
+*.sqlite3
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+
+# Frontend build
+node_modules/
+dist/
+build/
+
+# Sekrety / konfiguracje lokalne
+.env
+*.env
