@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="pl" class="h-full">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PROF INSTAL – Kalkulator CWU (Pyodide) + Toggles</title>
+  <meta name="description" content="Prosty kalkulator CWU działający w przeglądarce dzięki Pyodide. Hosted on GitHub Pages." />
+  <style>
+    :root{--bg:#0b0f19;--card:#141a2a;--muted:#a8b3cf;--accent:#64d2ff;--ok:#61d345;--warn:#ffd166;--err:#ff6b6b}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:#fff;font:16px/1.5 system-ui,Segoe UI,Roboto,Inter,Arial}
+    .container{max-width:1000px;margin:0 auto;padding:24px}
+    .card{background:var(--card);border-radius:16px;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    h1{font-size:28px;margin:0 0 12px}
+    h2{font-size:18px;margin:20px 0 8px;color:var(--muted)}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+    label{display:block;font-size:14px;color:var(--muted);margin-bottom:6px}
+    input, select, button, textarea{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #2a324a;background:#0e1424;color:#e6edff}
+    input:focus, select:focus, textarea:focus{outline:2px solid var(--accent);border-color:transparent}
+    button{cursor:pointer;font-weight:600}
+    .btn-primary{background:linear-gradient(135deg,#1a88ff,#7dd3fc);border:0;color:#00111f}
+    .btn-ghost{background:transparent;border:1px solid #2a324a}
+    .muted{color:var(--muted)}
+    .grid{display:grid;gap:16px}
+    .switch{position:relative;display:inline-block;width:48px;height:26px}
+    .switch input{opacity:0;width:0;height:0}
+    .slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#2a324a;transition:.2s;border-radius:999px}
+    .slider:before{position:absolute;content:"";height:20px;width:20px;left:3px;top:3px;background:white;transition:.2s;border-radius:50%}
+    input:checked + .slider{background:linear-gradient(135deg,#04c,#0dd)}
+    input:checked + .slider:before{transform:translateX(22px)}
+    details{border:1px solid #2a324a;border-radius:12px;padding:10px 12px}
+    summary{cursor:pointer;font-weight:600;color:#d7e3ff}
+    code, pre{background:#0e1424;border:1px solid #2a324a;border-radius:8px;padding:8px;color:#d7e3ff}
+    .status{font-size:13px}
+    .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)}
+  </style>
+  <!-- Pyodide: Python in the browser (WebAssembly). Keep version pinned for stability. -->
+  <script defer src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+</head>
+<body class="h-full">
+  <header class="container">
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div>
+        <h1>PROF INSTAL – Kalkulator CWU (client‑side Python)</h1>
+        <p class="muted">Bez serwera. Obliczenia wykonuje <strong>Pyodide</strong> w Twojej przeglądarce. Idealne pod GitHub Pages.</p>
+      </div>
+      <div>
+        <label class="muted" style="display:block;margin-bottom:6px">Tryb ekspercki</label>
+        <label class="switch"><input id="expertMode" type="checkbox" /><span class="slider"></span></label>
+      </div>
+    </div>
+  </header>
+
+  <main class="container grid">
+    <section class="card">
+      <h2>Parametry CWU</h2>
+      <div class="row-3">
+        <div><label>Zużycie dobowo [m³]</label><input id="q_m3" type="number" step="0.01" value="10" /></div>
+        <div><label>Temperatura zimnej wody T<sub>z</sub> [°C]</label><input id="tz" type="number" step="0.1" value="8" /></div>
+        <div><label>Temperatura ciepłej wody T<sub>c</sub> [°C]</label><input id="tc" type="number" step="0.1" value="55" /></div>
+      </div>
+
+      <details style="margin-top:12px">
+        <summary>Ustawienia zaawansowane (toggle)</summary>
+        <div class="row">
+          <div><label>Gęstość wody ρ [kg/m³]</label><input id="rho" type="number" step="0.1" value="998" /></div>
+          <div><label>Ciepło właściwe c<sub>p</sub> [kJ/kgK]</label><input id="cp" type="number" step="0.001" value="4.186" /></div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <div><label>Straty na cyrkulacji [%]</label><input id="circLoss" type="number" step="0.1" value="15" /></div>
+          <div><label>Sprawność wymiany [%]</label><input id="eta" type="number" step="0.1" value="90" /></div>
+        </div>
+      </details>
+
+      <div style="display:flex;gap:10px;align-items:center;margin-top:16px">
+        <button class="btn-primary" id="runBtn">OBLICZ</button>
+        <button class="btn-ghost" id="resetBtn">Reset</button>
+        <span id="pyStatus" class="status">Ładowanie środowiska Python…</span>
+      </div>
+
+      <h2>Wynik</h2>
+      <pre id="output" style="min-height:110px">—</pre>
+
+      <details>
+        <summary>Zobacz kod Pythona (toggle)</summary>
+        <pre id="pyCode"></pre>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>FAQ</h2>
+      <ul>
+        <li><strong>Gdzie działa Python?</strong> W Twojej przeglądarce (Pyodide, WebAssembly). Nie potrzebujesz backendu.</li>
+        <li><strong>Czy to zadziała na GitHub Pages?</strong> Tak – to statyczne pliki HTML/JS/CSS.</li>
+        <li><strong>Bezpieczeństwo kluczy API?</strong> Nie wstrzykujemy tu żadnych kluczy. Jeśli chcesz dodać czat AI, użyj własnego backendu/proxy (np. Cloudflare Workers) – klucz pozostaje po stronie serwera.</li>
+      </ul>
+    </section>
+  </main>
+
+  <script>
+    // --- Python source (rendered below for podgląd) ---
+    const pythonSource = `
+from math import isfinite
+
+def moc_zamowiona(q_m3_doba: float, tz: float, tc: float, rho: float = 998.0,
+                   cp_kJ: float = 4.186, circ_loss_pct: float = 15.0,
+                   eta_pct: float = 90.0):
+    """Szacuje zapotrzebowanie mocy i energii dla CWU.
+    Zwraca: (energia_doba_MJ, energia_doba_kWh, moc_szczytowa_kW)
+    Założenie: profil dobowy z 2h oknem szczytu.
+    """
+    if not all(isfinite(x) for x in [q_m3_doba, tz, tc, rho, cp_kJ, circ_loss_pct, eta_pct]):
+        raise ValueError("Nieprawidłowe dane")
+    if tc <= tz:
+        raise ValueError("T_c musi być większa niż T_z")
+
+    # Konwersje
+    q_kg = q_m3_doba * rho  # kg/doba
+    dT = tc - tz            # K
+    cp = cp_kJ / 1000.0     # kJ/kgK -> MJ/kgK
+
+    # Energia idealna (bez strat)
+    E_MJ = q_kg * cp * dT   # MJ/doba
+
+    # Straty i sprawność
+    E_MJ *= (1 + circ_loss_pct/100.0)
+    E_MJ /= max(eta_pct/100.0, 1e-6)
+
+    E_kWh = E_MJ / 3.6
+
+    # Prosty pik: 60% dobowego zużycia w 2h
+    E_peak_kWh = 0.60 * E_kWh
+    moc_peak_kW = E_peak_kWh / 2.0
+
+    return round(E_MJ,2), round(E_kWh,2), round(moc_peak_kW,1)
+`;
+    document.getElementById('pyCode').textContent = pythonSource;
+
+    // --- Pyodide bootstrap ---
+    let pyodideReady = false, pyodide = null;
+    (async () => {
+      try {
+        pyodide = await loadPyodide();
+        await pyodide.runPythonAsync(pythonSource);
+        document.getElementById('pyStatus').textContent = 'Python gotowy 🟢';
+        document.getElementById('pyStatus').classList.add('ok');
+        pyodideReady = true;
+      } catch (e) {
+        document.getElementById('pyStatus').textContent = 'Błąd ładowania Pyodide';
+        document.getElementById('pyStatus').classList.add('err');
+        console.error(e);
+      }
+    })();
+
+    // --- UI ---
+    const $ = (id) => document.getElementById(id);
+    $('resetBtn').addEventListener('click', () => {
+      ['q_m3','tz','tc','rho','cp','circLoss','eta'].forEach((id) => {});
+      $('output').textContent = '—';
+    });
+
+    $('runBtn').addEventListener('click', async () => {
+      if (!pyodideReady) return alert('Python jeszcze się ładuje…');
+      const q_m3 = parseFloat($('q_m3').value);
+      const tz = parseFloat($('tz').value);
+      const tc = parseFloat($('tc').value);
+      const rho = parseFloat($('rho').value);
+      const cp = parseFloat($('cp').value);
+      const circ = parseFloat($('circLoss').value);
+      const eta = parseFloat($('eta').value);
+
+      try {
+        const result = await pyodide.runPythonAsync(`moc_zamowiona(${q_m3}, ${tz}, ${tc}, ${rho}, ${cp}, ${circ}, ${eta})`);
+        const [E_MJ, E_kWh, P_kW] = result.toJs();
+        $('output').textContent = `Energia na dobę: ${E_MJ} MJ (≈ ${E_kWh} kWh)\nSzczytowa moc zamówiona ~ ${P_kW} kW (założenie: 2h okno szczytu).`;
+      } catch (e) {
+        $('output').textContent = 'Błąd danych: ' + e.message;
+      }
+    });
+
+    // Expert mode example: flip layout
+    $('expertMode').addEventListener('change', (e) => {
+      document.body.style.letterSpacing = e.target.checked ? '0.1px' : '0px';
+    });
+  </script>
+</body>
+</html>
