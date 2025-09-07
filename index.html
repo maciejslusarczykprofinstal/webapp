@@ -35,7 +35,7 @@
     .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)}
   </style>
   <!-- Pyodide: Python in the browser (WebAssembly). Keep version pinned for stability. -->
-  <script defer src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
 </head>
 <body class="h-full">
   <header class="container">
@@ -140,27 +140,36 @@ def moc_zamowiona(q_m3_doba: float, tz: float, tc: float, rho: float = 998.0,
     let pyodideReady = false, pyodide = null;
     (async () => {
       try {
+        // Check if loadPyodide is available
+        if (typeof loadPyodide === 'undefined') {
+          throw new Error('Pyodide CDN not loaded - check network connection or try different browser');
+        }
         pyodide = await loadPyodide();
         await pyodide.runPythonAsync(pythonSource);
         document.getElementById('pyStatus').textContent = 'Python gotowy 🟢';
         document.getElementById('pyStatus').classList.add('ok');
         pyodideReady = true;
       } catch (e) {
-        document.getElementById('pyStatus').textContent = 'Błąd ładowania Pyodide';
+        document.getElementById('pyStatus').textContent = 'Błąd ładowania Pyodide - sprawdź połączenie internetowe';
         document.getElementById('pyStatus').classList.add('err');
-        console.error(e);
+        console.error('Pyodide error:', e);
       }
     })();
 
     // --- UI ---
     const $ = (id) => document.getElementById(id);
     $('resetBtn').addEventListener('click', () => {
-      ['q_m3','tz','tc','rho','cp','circLoss','eta'].forEach((id) => {});
+      $('q_m3').value = '10';
+      $('tz').value = '8';
+      $('tc').value = '55';
+      $('rho').value = '998';
+      $('cp').value = '4.186';
+      $('circLoss').value = '15';
+      $('eta').value = '90';
       $('output').textContent = '—';
     });
 
     $('runBtn').addEventListener('click', async () => {
-      if (!pyodideReady) return alert('Python jeszcze się ładuje…');
       const q_m3 = parseFloat($('q_m3').value);
       const tz = parseFloat($('tz').value);
       const tc = parseFloat($('tc').value);
@@ -168,6 +177,32 @@ def moc_zamowiona(q_m3_doba: float, tz: float, tc: float, rho: float = 998.0,
       const cp = parseFloat($('cp').value);
       const circ = parseFloat($('circLoss').value);
       const eta = parseFloat($('eta').value);
+
+      if (!pyodideReady) {
+        // Fallback JavaScript calculation when Pyodide is not available
+        try {
+          // Basic validation
+          if (tc <= tz) throw new Error('T_c musi być większa niż T_z');
+          
+          // JavaScript implementation of the Python calculation
+          const q_kg = q_m3 * rho;
+          const dT = tc - tz;
+          const cp_MJ = cp / 1000.0; // kJ/kgK -> MJ/kgK
+          
+          let E_MJ = q_kg * cp_MJ * dT;
+          E_MJ *= (1 + circ/100.0);
+          E_MJ /= Math.max(eta/100.0, 1e-6);
+          
+          const E_kWh = E_MJ / 3.6;
+          const E_peak_kWh = 0.60 * E_kWh;
+          const moc_peak_kW = E_peak_kWh / 2.0;
+          
+          $('output').textContent = `Energia na dobę: ${E_MJ.toFixed(2)} MJ (≈ ${E_kWh.toFixed(2)} kWh)\nSzczytowa moc zamówiona ~ ${moc_peak_kW.toFixed(1)} kW (założenie: 2h okno szczytu).\n\n⚠️ Obliczenia wykonane przez fallback JavaScript (Pyodide niedostępny)`;
+        } catch (e) {
+          $('output').textContent = 'Błąd danych: ' + e.message;
+        }
+        return;
+      }
 
       try {
         const result = await pyodide.runPythonAsync(`moc_zamowiona(${q_m3}, ${tz}, ${tc}, ${rho}, ${cp}, ${circ}, ${eta})`);
